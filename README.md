@@ -9,7 +9,8 @@ Pierwszy etap systemu dla kancelarii: oddzielne przestrzenie kancelarii, sprawy,
 3. `npm install`, następnie `npm run dev`.
 4. Załóż konto przez formularz, potwierdź e-mail, jeśli projekt tego wymaga, i utwórz kancelarię.
 
-Na Vercel ustaw `VITE_SUPABASE_URL` i `VITE_SUPABASE_PUBLISHABLE_KEY`. Migrację bazy uruchom przed pierwszym logowaniem.
+Migrację bazy uruchom przed pierwszym logowaniem.
+Przy standardowym buildzie produkcyjnym Vite odczytuje też `.env.production`, które zawiera tylko adres projektu i klucz **publikowalny**. Są to wartości widoczne w aplikacji przeglądarkowej. Kluczy `secret` i `service_role` nie wolno tam umieszczać.
 
 ## Terminy
 
