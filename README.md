@@ -4,12 +4,13 @@ Pierwszy etap systemu dla kancelarii: oddzielne przestrzenie kancelarii, sprawy,
 
 ## Uruchomienie
 
-1. Utwórz osobny projekt Supabase i uruchom `supabase/schema.sql` w SQL Editor.
-2. Skopiuj `.env.example` do `.env` i wpisz adres projektu oraz klucz publikowalny (`anon`/publishable). Nigdy nie umieszczaj klucza `service_role` w aplikacji lub repozytorium.
+1. W osobnym projekcie Supabase LEXGO (`owuniutwaqevwbzjcqls`) uruchom `supabase/schema.sql` w SQL Editor. Wykonaj to tylko raz w pustym projekcie.
+2. Skopiuj `.env.example` do `.env` i wpisz klucz publikowalny (`anon`/publishable). Adres projektu jest już uzupełniony. Nigdy nie umieszczaj klucza `service_role` w aplikacji lub repozytorium.
 3. `npm install`, następnie `npm run dev`.
 4. Załóż konto przez formularz, potwierdź e-mail, jeśli projekt tego wymaga, i utwórz kancelarię.
 
-Na Vercel ustaw `VITE_SUPABASE_URL` i `VITE_SUPABASE_PUBLISHABLE_KEY`. Migrację bazy uruchom przed pierwszym logowaniem.
+Migrację bazy uruchom przed pierwszym logowaniem.
+Przy standardowym buildzie produkcyjnym Vite odczytuje też `.env.production`, które zawiera tylko adres projektu i klucz **publikowalny**. Są to wartości widoczne w aplikacji przeglądarkowej. Kluczy `secret` i `service_role` nie wolno tam umieszczać.
 
 ## Terminy
 
