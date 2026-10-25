@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import BillingDrafts from './BillingDrafts.jsx';
 const pln = value => new Intl.NumberFormat('pl-PL',{style:'currency',currency:'PLN'}).format(Number(value)||0);
 export default function FeesWorkspace({db,orgId,cases,isAdmin,onError}) {
   const [fees,setFees]=useState([]);
@@ -81,5 +82,6 @@ export default function FeesWorkspace({db,orgId,cases,isAdmin,onError}) {
         </div>;
       })}
     </section>
+    <BillingDrafts db={db} orgId={orgId} isAdmin={isAdmin} onError={onError}/>
   </div>;
 }
