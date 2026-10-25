@@ -30,13 +30,13 @@ create index if not exists fee_payments_fee on public.fee_payments(fee_agreement
 alter table public.fee_agreements enable row level security;
 alter table public.fee_payments enable row level security;
 create policy fee_read on public.fee_agreements for select to authenticated
- using(public.can_access_case(case_id));
+ using(public.is_admin(organization_id));
 create policy fee_insert on public.fee_agreements for insert to authenticated
  with check(public.is_admin(organization_id) and created_by=auth.uid());
 create policy fee_update on public.fee_agreements for update to authenticated
  using(public.is_admin(organization_id)) with check(public.is_admin(organization_id));
 create policy payment_read on public.fee_payments for select to authenticated
- using(exists(select 1 from public.fee_agreements f where f.id=fee_agreement_id and f.organization_id=fee_payments.organization_id and public.can_access_case(f.case_id)));
+ using(exists(select 1 from public.fee_agreements f where f.id=fee_agreement_id and f.organization_id=fee_payments.organization_id and public.is_admin(f.organization_id)));
 create policy payment_insert on public.fee_payments for insert to authenticated
  with check(public.is_admin(organization_id) and created_by=auth.uid()
  and exists(select 1 from public.fee_agreements f where f.id=fee_agreement_id and f.organization_id=fee_payments.organization_id));
