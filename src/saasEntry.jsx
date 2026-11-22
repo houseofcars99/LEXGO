@@ -5,6 +5,7 @@ import { LayoutDashboard, BriefcaseBusiness, Users, ListTodo, CalendarDays, File
 import './saas.css';
 import ClientsWorkspace from './ClientsWorkspace.jsx';
 import DocumentsWorkspace from './DocumentsWorkspace.jsx';
+import LexgoAIWorkspace from './LexgoAIWorkspace.jsx';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -154,7 +155,8 @@ function App() {
           {tab==='tasks'&&<section className="lx-card"><div className="lx-cardhead"><h2>Zadania</h2><button className="lx-btn primary" disabled={!data.cases.length} onClick={()=>setForm('task')}><Plus size={15}/> Dodaj zadanie</button></div>{data.tasks.map(t=><div className="lx-row" key={t.id}><div><b className={t.status==='done'?'lx-done':''}>{t.title}</b><small>{byCase(t.case_id)?.case_number||'Sprawa'} · {nice(t.due_on)}</small></div><button className="lx-btn small" disabled={busy} onClick={()=>markTask(t)}>{t.status==='done'?<><Check size={14}/> Wykonane</>:'Oznacz wykonanie'}</button></div>)}{!data.tasks.length&&<p className="lx-empty">Brak zadań w dostępnych sprawach.</p>}</section>}
           {tab==='deadlines'&&<section className="lx-card"><div className="lx-cardhead"><h2>Terminy procesowe</h2><button className="lx-btn primary" disabled={!data.cases.length} onClick={()=>setForm('deadline')}><Plus size={15}/> Dodaj termin</button></div>{data.deadlines.map(d=><div className="lx-row" key={d.id}><div><b>{d.title}</b><small>Do {nice(d.due_on)} · doręczenie: {nice(d.received_on)} · {byCase(d.case_id)?.case_number||'Sprawa'}</small></div>{d.review_status==='confirmed'?<span className="lx-badge green">Zatwierdzony</span>:<button className="lx-btn small" disabled={busy} onClick={()=>confirmDeadline(d)}>Zatwierdź</button>}</div>)}{!data.deadlines.length&&<p className="lx-empty">Brak terminów. Wprowadź termin ręcznie po sprawdzeniu dokumentów.</p>}</section>}
           {tab==='documents'&&<DocumentsWorkspace db={db} orgId={orgId} cases={data.cases} userId={session.user.id}/>}
-          {['ai','billing','integrations','settings'].includes(tab)&&<Feature tab={tab} org={selectedOrg?.name} />}
+          {tab==='ai'&&<LexgoAIWorkspace db={db} orgId={orgId} cases={data.cases} userId={session.user.id}/>}
+          {['billing','integrations','settings'].includes(tab)&&<Feature tab={tab} org={selectedOrg?.name} />}
         </>}
         <p className="lx-footer">LEXGO SaaS Alpha · Bez połączeń KSeF, PI ani zewnętrznego AI · Projekt nieprzeznaczony do danych rzeczywistych.</p>
       </div>
