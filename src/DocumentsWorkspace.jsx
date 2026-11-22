@@ -64,9 +64,10 @@ export default function DocumentsWorkspace({db,orgId,cases,userId}) {
 
   async function upload(event) {
     event.preventDefault();
+    const formElement=event.currentTarget;
     setError('');setNotice('');
     if(!ready||!currentCase||busy)return;
-    const form=new FormData(event.currentTarget);
+    const form=new FormData(formElement);
     const file=form.get('file');
     if(!(file instanceof File)||!file.name){setError('Wybierz plik PDF lub DOCX.');return;}
     const extension=file.name.toLowerCase().split('.').pop();
@@ -103,7 +104,7 @@ export default function DocumentsWorkspace({db,orgId,cases,userId}) {
         .select('id').single();
       if(finished.error)throw finished.error;
       await reload();
-      event.currentTarget.reset();
+      formElement.reset();
       setNotice('Plik zapisano prywatnie w przypisanej sprawie.');
     }catch(e){
       setError('Przesyłanie nie zostało ukończone. '+(e.message||'Spróbuj ponownie.'));
