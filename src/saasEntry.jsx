@@ -5,6 +5,7 @@ import { LayoutDashboard, BriefcaseBusiness, Users, ListTodo, CalendarDays, File
 import './saas.css';
 import ClientsWorkspace from './ClientsWorkspace.jsx';
 import DocumentsWorkspace from './DocumentsWorkspace.jsx';
+import LexgoAIWorkspace from './LexgoAIWorkspace.jsx';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -137,7 +138,7 @@ function App() {
       <div className="lx-top"><span>LEXGO / <b>{heading}</b></span><div><span className="lx-tag">ALPHA · ŚRODOWISKO TESTOWE</span><ShieldCheck size={17}/></div></div>
       <div className="lx-content">
         <div className="lx-heading"><div><div className="lx-overline">PANEL KANCELARII</div><h1>{heading}</h1><p>{selectedOrg?.name||'Utwórz pierwszą kancelarię'}</p></div><button className="lx-btn" onClick={refresh} disabled={!orgId||loading}><RefreshCcw size={15}/> Odśwież</button></div>
-        <div className="lx-alert"><AlertTriangle size={17}/><span><b>Wersja testowa.</b> Nie przechowuj rzeczywistych akt ani danych klientów przed audytem bezpieczeństwa. KSeF, PI i AI nie są jeszcze zintegrowane.</span></div>
+        <div className="lx-alert"><AlertTriangle size={17}/><span><b>Wersja testowa.</b> Nie przechowuj rzeczywistych akt ani danych klientów przed audytem bezpieczeństwa. KSeF i PI nie są jeszcze zintegrowane. LEXGO AI działa wyłącznie w trybie testowym po ręcznym włączeniu dostawcy API.</span></div>
         {error&&<div className="lx-error" role="alert">{error}</div>}{notice&&<div className="lx-success" role="status">{notice}</div>}
         {!orgs.length?<div className="lx-card lx-first"><h2>Utwórz przestrzeń kancelarii</h2><p>Przestrzeń jest powiązana z Twoim kontem Supabase. Nie używaj jeszcze rzeczywistych danych.</p><form className="lx-form" onSubmit={onForm(makeOrg)}>{input('name','Nazwa kancelarii','Kancelaria testowa')}<button className="lx-btn primary" disabled={busy}>Utwórz kancelarię</button></form></div>:<>
           {tab==='dashboard'&&<>
@@ -154,7 +155,8 @@ function App() {
           {tab==='tasks'&&<section className="lx-card"><div className="lx-cardhead"><h2>Zadania</h2><button className="lx-btn primary" disabled={!data.cases.length} onClick={()=>setForm('task')}><Plus size={15}/> Dodaj zadanie</button></div>{data.tasks.map(t=><div className="lx-row" key={t.id}><div><b className={t.status==='done'?'lx-done':''}>{t.title}</b><small>{byCase(t.case_id)?.case_number||'Sprawa'} · {nice(t.due_on)}</small></div><button className="lx-btn small" disabled={busy} onClick={()=>markTask(t)}>{t.status==='done'?<><Check size={14}/> Wykonane</>:'Oznacz wykonanie'}</button></div>)}{!data.tasks.length&&<p className="lx-empty">Brak zadań w dostępnych sprawach.</p>}</section>}
           {tab==='deadlines'&&<section className="lx-card"><div className="lx-cardhead"><h2>Terminy procesowe</h2><button className="lx-btn primary" disabled={!data.cases.length} onClick={()=>setForm('deadline')}><Plus size={15}/> Dodaj termin</button></div>{data.deadlines.map(d=><div className="lx-row" key={d.id}><div><b>{d.title}</b><small>Do {nice(d.due_on)} · doręczenie: {nice(d.received_on)} · {byCase(d.case_id)?.case_number||'Sprawa'}</small></div>{d.review_status==='confirmed'?<span className="lx-badge green">Zatwierdzony</span>:<button className="lx-btn small" disabled={busy} onClick={()=>confirmDeadline(d)}>Zatwierdź</button>}</div>)}{!data.deadlines.length&&<p className="lx-empty">Brak terminów. Wprowadź termin ręcznie po sprawdzeniu dokumentów.</p>}</section>}
           {tab==='documents'&&<DocumentsWorkspace db={db} orgId={orgId} cases={data.cases} userId={session.user.id}/>}
-          {['ai','billing','integrations','settings'].includes(tab)&&<Feature tab={tab} org={selectedOrg?.name} />}
+          {tab==='ai'&&<LexgoAIWorkspace db={db} orgId={orgId} cases={data.cases} userId={session.user.id}/>}
+          {['billing','integrations','settings'].includes(tab)&&<Feature tab={tab} org={selectedOrg?.name} />}
         </>}
         <p className="lx-footer">LEXGO SaaS Alpha · Bez połączeń KSeF, PI ani zewnętrznego AI · Projekt nieprzeznaczony do danych rzeczywistych.</p>
       </div>
