@@ -138,7 +138,7 @@ function App() {
       <div className="lx-top"><span>LEXGO / <b>{heading}</b></span><div><span className="lx-tag">ALPHA · ŚRODOWISKO TESTOWE</span><ShieldCheck size={17}/></div></div>
       <div className="lx-content">
         <div className="lx-heading"><div><div className="lx-overline">PANEL KANCELARII</div><h1>{heading}</h1><p>{selectedOrg?.name||'Utwórz pierwszą kancelarię'}</p></div><button className="lx-btn" onClick={refresh} disabled={!orgId||loading}><RefreshCcw size={15}/> Odśwież</button></div>
-        <div className="lx-alert"><AlertTriangle size={17}/><span><b>Wersja testowa.</b> Nie przechowuj rzeczywistych akt ani danych klientów przed audytem bezpieczeństwa. KSeF, PI i AI nie są jeszcze zintegrowane.</span></div>
+        <div className="lx-alert"><AlertTriangle size={17}/><span><b>Wersja testowa.</b> Nie przechowuj rzeczywistych akt ani danych klientów przed audytem bezpieczeństwa. KSeF i PI nie są jeszcze zintegrowane. LEXGO AI działa wyłącznie w trybie testowym po ręcznym włączeniu dostawcy API.</span></div>
         {error&&<div className="lx-error" role="alert">{error}</div>}{notice&&<div className="lx-success" role="status">{notice}</div>}
         {!orgs.length?<div className="lx-card lx-first"><h2>Utwórz przestrzeń kancelarii</h2><p>Przestrzeń jest powiązana z Twoim kontem Supabase. Nie używaj jeszcze rzeczywistych danych.</p><form className="lx-form" onSubmit={onForm(makeOrg)}>{input('name','Nazwa kancelarii','Kancelaria testowa')}<button className="lx-btn primary" disabled={busy}>Utwórz kancelarię</button></form></div>:<>
           {tab==='dashboard'&&<>
