@@ -127,8 +127,37 @@ function Feature({tab,org}){
   return <section className="lx-card lx-feature"><span className="lx-overline">MODUŁ W PRZYGOTOWANIU</span><h2>{title}</h2><p>{desc}</p><div className="lx-featurestatus"><AlertTriangle size={17}/> Bez połączenia produkcyjnego. Dane kancelarii: {org||'—'}.</div></section>;
 }
 function Auth({db}){
-  const [register,setRegister]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
-  async function submit(e){e.preventDefault();setBusy(true);setError('');setMessage('');const f=new FormData(e.currentTarget),details={email:f.get('email'),password:f.get('password')};try{const r=register?await db.auth.signUp(details):await db.auth.signInWithPassword(details);if(r.error)throw r.error;if(register)setMessage('Sprawdź skrzynkę pocztową i potwierdź rejestrację, jeżeli jest to wymagane.');}catch(e){setError(e.message||'Błąd uwierzytelnienia.');}finally{setBusy(false);}}
-  return <div className="lx-auth"><div className="lx-authleft"><div className="lx-brand"><span>§</span><div>LEXGO<small>KANCELARIA OS</small></div></div><h1>Wszystkie sprawy.<br/>Jedna przestrzeń.</h1><p>CRM, terminy, dokumenty i narzędzia AI dla kancelarii. Trwa budowa wersji SaaS.</p></div><div className="lx-authright"><div className="lx-authbox"><span className="lx-overline">DOSTĘP TESTOWY</span><h2>{register?'Rejestracja':'Zaloguj się'}</h2><div className="lx-alert"><AlertTriangle size={17}/> Wyłącznie dane testowe. Nie wprowadzaj prawdziwych akt.</div><form className="lx-form" onSubmit={submit}><label className="lx-label">E-mail<input type="email" name="email" required autoComplete="email"/></label><label className="lx-label">Hasło<input type="password" name="password" minLength={6} required autoComplete={register?'new-password':'current-password'}/></label><button className="lx-btn primary" disabled={busy}>{register?'Utwórz konto':'Zaloguj się'}</button></form>{error&&<p className="lx-error">{error}</p>}{message&&<p className="lx-success">{message}</p>}<button className="lx-textbtn" onClick={()=>{setRegister(!register);setError('');setMessage('');}}>{register?'Mam już konto':'Utwórz konto testowe'}</button></div></div></div>;
+  const [register,setRegister]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[pendingEmail,setPendingEmail]=useState('');
+  async function submit(e){
+    e.preventDefault();setBusy(true);setError('');setMessage('');
+    const fd=new FormData(e.currentTarget);
+    const email=String(fd.get('email')||'').trim();
+    const credentials={email,password:fd.get('password')};
+    try{
+      const response=register
+        ? await db.auth.signUp({...credentials,options:{emailRedirectTo:window.location.origin}})
+        : await db.auth.signInWithPassword(credentials);
+      if(response.error)throw response.error;
+      if(register){
+        if(response.data?.session){
+          setPendingEmail('');
+          setMessage('Konto utworzone i sesja została uruchomiona. Przechodzę do panelu.');
+        }else{
+          setPendingEmail(email);
+          setMessage('Supabase przyjął żądanie rejestracji, ale LEXGO nie ma potwierdzenia dostarczenia wiadomości. Jeżeli weryfikacja e-mail jest włączona, sprawdź Odebrane, Spam i Oferty. Gdy konto już istnieje, spróbuj zwykłego logowania.');
+        }
+      }
+    }catch(e){setError(e.message||'Błąd uwierzytelnienia.');}finally{setBusy(false);}
+  }
+  async function resendConfirmation(){
+    if(!pendingEmail||busy)return;
+    setBusy(true);setError('');setMessage('');
+    try{
+      const response=await db.auth.resend({type:'signup',email:pendingEmail,options:{emailRedirectTo:window.location.origin}});
+      if(response.error)throw response.error;
+      setMessage('Supabase przyjął żądanie ponowienia wiadomości. To nie potwierdza dostarczenia e-maila. Sprawdź folder Spam. Ponawiaj tylko w razie potrzeby ze względu na limity wysyłki.');
+    }catch(e){setError(e.message||'Nie udało się ponowić żądania wiadomości.');}finally{setBusy(false);}
+  }
+  return <div className="lx-auth"><div className="lx-authleft"><div className="lx-brand"><span>§</span><div>LEXGO<small>KANCELARIA OS</small></div></div><h1>Wszystkie sprawy.<br/>Jedna przestrzeń.</h1><p>CRM, terminy, dokumenty i narzędzia AI dla kancelarii. Trwa budowa wersji SaaS.</p></div><div className="lx-authright"><div className="lx-authbox"><span className="lx-overline">DOSTĘP TESTOWY</span><h2>{register?'Rejestracja':'Zaloguj się'}</h2><div className="lx-alert"><AlertTriangle size={17}/> Wyłącznie dane testowe. Nie wprowadzaj prawdziwych akt.</div><form className="lx-form" onSubmit={submit}><label className="lx-label">E-mail<input type="email" name="email" required autoComplete="email"/></label><label className="lx-label">Hasło<input type="password" name="password" minLength={6} required autoComplete={register?'new-password':'current-password'}/></label><button className="lx-btn primary" disabled={busy}>{register?'Utwórz konto':'Zaloguj się'}</button></form>{error&&<p className="lx-error" role="alert">{error}</p>}{message&&<p className="lx-success" role="status">{message}</p>}{register&&pendingEmail&&<button className="lx-btn" style={{marginTop:12}} disabled={busy} onClick={resendConfirmation}>Ponów wiadomość potwierdzającą</button>}<div><button className="lx-textbtn" onClick={()=>{setRegister(!register);setError('');setMessage('');setPendingEmail('');}}>{register?'Mam już konto':'Utwórz konto testowe'}</button></div></div></div></div>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
