@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import { LayoutDashboard, BriefcaseBusiness, Users, ListTodo, CalendarDays, FileText, BrainCircuit, Receipt, Link2, Settings, LogOut, Plus, ShieldCheck, RefreshCcw, AlertTriangle, Search, Check, Clock3 } from 'lucide-react';
 import './saas.css';
+import ClientsWorkspace from './ClientsWorkspace.jsx';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -12,7 +13,7 @@ const MENU = [
   ['tasks','Zadania',ListTodo],['deadlines','Terminy',CalendarDays],['documents','Dokumenty',FileText],
   ['ai','LEXGO AI',BrainCircuit],['billing','Rozliczenia',Receipt],['integrations','Integracje',Link2],['settings','Ustawienia',Settings]
 ];
-const EMPTY = {cases:[],tasks:[],deadlines:[],members:[]};
+const EMPTY = {cases:[],tasks:[],deadlines:[],members:[],clients:[],crmReady:false};
 const words = v => String(v ?? '').trim();
 const nice = v => v ? new Date(v + 'T12:00:00').toLocaleDateString('pl-PL') : '—';
 
@@ -61,13 +62,44 @@ function App() {
         db.from('memberships').select('user_id,role').eq('organization_id',orgId)
       ]);
       const values=[c,t,d,m].map(x=>{if(x.error)throw x.error;return x.data||[];});
-      setData({cases:values[0],tasks:values[1],deadlines:values[2],members:values[3]});
+            const currentAdmin = values[3].some(m => m.user_id === session?.user?.id && m.role === 'admin');
+      let clientRecords = [], crmReady = false, casesData = values[0];
+      if (currentAdmin) {
+        const crmResult = await db.from('clients')
+          .select('id,organization_id,kind,display_name,email,phone,tax_id')
+          .eq('organization_id',orgId).order('display_name');
+        if (!crmResult.error) {
+          crmReady = true;
+          clientRecords = crmResult.data || [];
+          const linked = await db.from('cases').select('id,client_id').eq('organization_id',orgId);
+          if (!linked.error) {
+            const links = new Map((linked.data || []).map(c => [c.id,c.client_id]));
+            casesData = values[0].map(c => ({...c,client_id:links.get(c.id)||null}));
+          }
+        } else if (!['PGRST205','42P01'].includes(crmResult.error.code)) {
+          setError('Nie udało się pobrać kartotek: ' + crmResult.error.message);
+        }
+      }
+      setData({cases:casesData,tasks:values[1],deadlines:values[2],members:values[3],clients:clientRecords,crmReady});
       setCurrentCase(old=>values[0].some(x=>x.id===old)?old:values[0][0]?.id||'');
     }catch(e){setError(e.message||'Błąd odczytu danych.');}finally{setLoading(false);}
   }
   useEffect(()=>{setData(EMPTY);setCurrentCase('');if(orgId)refresh();},[orgId]);
   async function makeOrg(fd){await execute(async()=>{await ensure(await db.rpc('create_organization',{org_name:words(fd.get('name'))}));const rows=await ensure(await db.from('organizations').select('id,name').order('created_at'));setOrgs(rows||[]);setOrgId(rows?.at(-1)?.id||'');},'Utworzono przestrzeń kancelarii.');}
-  async function makeCase(fd){await execute(async()=>{await ensure(await db.from('cases').insert({organization_id:orgId,title:words(fd.get('title')),case_number:words(fd.get('number')),client_name:words(fd.get('client')),created_by:session.user.id}));await refresh();},'Dodano sprawę.');}
+  async function makeCase(fd){await execute(async()=>{
+    const clientId = fd.get('client_id') || null;
+    const selected = data.clients.find(c => c.id === clientId);
+    const payload = {
+      organization_id:orgId,
+      title:words(fd.get('title')),
+      case_number:words(fd.get('number')),
+      client_name:selected?.display_name || words(fd.get('client')),
+      created_by:session.user.id
+    };
+    if(selected && data.crmReady) payload.client_id = selected.id;
+    await ensure(await db.from('cases').insert(payload));
+    await refresh();
+  },'Dodano sprawę.');}
   async function makeTask(fd){await execute(async()=>{await ensure(await db.from('tasks').insert({organization_id:orgId,case_id:fd.get('case'),title:words(fd.get('title')),due_on:fd.get('date')||null,created_by:session.user.id,assignee_id:session.user.id}));await refresh();},'Dodano zadanie.');}
   async function makeDeadline(fd){await execute(async()=>{await ensure(await db.from('deadlines').insert({organization_id:orgId,case_id:fd.get('case'),title:words(fd.get('title')),due_on:fd.get('date'),received_on:fd.get('received')||null,source_note:words(fd.get('source')),created_by:session.user.id}));await refresh();},'Dodano termin do weryfikacji.');}
   async function markTask(t){await execute(async()=>{await ensure(await db.from('tasks').update({status:t.status==='done'?'todo':'done'}).eq('id',t.id));await refresh();},'Zmieniono status zadania.');}
@@ -77,7 +109,16 @@ function App() {
   const caseSelect=<label className="lx-label">Sprawa<select name="case" required defaultValue={currentCase||data.cases[0]?.id||''}>{data.cases.map(c=><option key={c.id} value={c.id}>{c.case_number||c.title}</option>)}</select></label>;
   const onForm=(fn)=>async e=>{e.preventDefault();await fn(new FormData(e.currentTarget));};
   const panels={
-    case:<form className="lx-form" onSubmit={onForm(makeCase)}>{input('title','Nazwa sprawy','Przedmiot sprawy')}{input('number','Sygnatura','I C 123/26','text',false)}{input('client','Klient','Nazwa klienta','text',false)}<button className="lx-btn primary" disabled={busy}>Zapisz sprawę</button></form>,
+    case:<form className="lx-form" onSubmit={onForm(makeCase)}>
+      {input('title','Nazwa sprawy','Przedmiot sprawy')}
+      {input('number','Sygnatura','I C 123/26','text',false)}
+      {data.crmReady && data.clients.length > 0 && <label className="lx-label">Wybierz klienta z kartoteki
+        <select name="client_id" defaultValue=""><option value="">— Bez powiązania —</option>
+          {data.clients.map(c=><option key={c.id} value={c.id}>{c.display_name}</option>)}
+        </select></label>}
+      {input('client','Klient — nazwa tekstowa, jeśli nie wybrano kartoteki','Nazwa klienta','text',false)}
+      <button className="lx-btn primary" disabled={busy}>Zapisz sprawę</button>
+    </form>,
     task:<form className="lx-form" onSubmit={onForm(makeTask)}>{input('title','Zadanie','Przygotować projekt pisma')}{caseSelect}{input('date','Termin wewnętrzny','','date',false)}<button className="lx-btn primary" disabled={busy}>Zapisz zadanie</button></form>,
     deadline:<form className="lx-form" onSubmit={onForm(makeDeadline)}>{input('title','Czynność procesowa','Zażalenie')}{caseSelect}{input('received','Data doręczenia','','date',false)}{input('date','Termin końcowy','','date')}{input('source','Źródło terminu','Karta akt i fragment zarządzenia','text',false)}<p className="lx-muted">System nie wyznacza terminów automatycznie. Zweryfikuj datę przed zatwierdzeniem.</p><button className="lx-btn primary" disabled={busy}>Zapisz do weryfikacji</button></form>
   };
@@ -99,12 +140,16 @@ function App() {
         {error&&<div className="lx-error" role="alert">{error}</div>}{notice&&<div className="lx-success" role="status">{notice}</div>}
         {!orgs.length?<div className="lx-card lx-first"><h2>Utwórz przestrzeń kancelarii</h2><p>Przestrzeń jest powiązana z Twoim kontem Supabase. Nie używaj jeszcze rzeczywistych danych.</p><form className="lx-form" onSubmit={onForm(makeOrg)}>{input('name','Nazwa kancelarii','Kancelaria testowa')}<button className="lx-btn primary" disabled={busy}>Utwórz kancelarię</button></form></div>:<>
           {tab==='dashboard'&&<>
-            <div className="lx-metrics">{[['Sprawy',data.cases.length,'Widoczne dla konta'],['Klienci',clients.length,'W powiązanych sprawach'],['Otwarte zadania',openTasks.length,'Wymagają działania'],['Terminy do weryfikacji',unverified.length,'Bez automatycznego liczenia']].map(([label,note,hint])=><div className="lx-metric" key={label}><small>{label}</small><strong>{note}</strong><span>{hint}</span></div>)}</div>
+            <div className="lx-metrics">{[['Sprawy',data.cases.length,'Widoczne dla konta'],['Klienci',data.crmReady?data.clients.length:clients.length,'W kartotece / sprawach'],['Otwarte zadania',openTasks.length,'Wymagają działania'],['Terminy do weryfikacji',unverified.length,'Bez automatycznego liczenia']].map(([label,note,hint])=><div className="lx-metric" key={label}><small>{label}</small><strong>{note}</strong><span>{hint}</span></div>)}</div>
             <div className="lx-grid"><section className="lx-card"><div className="lx-cardhead"><h2>Ostatnie sprawy</h2><button onClick={()=>setTab('cases')}>Wszystkie</button></div>{data.cases.slice(0,6).map(c=><div className="lx-row" key={c.id}><div><b>{c.title}</b><small>{c.case_number||'Bez sygnatury'} · {c.client_name||'Bez klienta'}</small></div><span className="lx-badge">Sprawa</span></div>)}{!data.cases.length&&<p className="lx-empty">Brak spraw. Dodaj pierwszą w module Sprawy.</p>}</section>
             <section className="lx-card"><div className="lx-cardhead"><h2>Do zrobienia</h2><button onClick={()=>setTab('tasks')}>Zadania</button></div>{openTasks.slice(0,6).map(t=><div className="lx-row" key={t.id}><div><b>{t.title}</b><small>{nice(t.due_on)} · {byCase(t.case_id)?.case_number||'Sprawa'}</small></div><Clock3 size={17}/></div>)}{!openTasks.length&&<p className="lx-empty">Brak otwartych zadań.</p>}</section></div>
           </>}
           {tab==='cases'&&<section className="lx-card"><div className="lx-cardhead"><h2>Rejestr spraw</h2>{admin&&<button className="lx-btn primary" onClick={()=>setForm('case')}><Plus size={15}/> Dodaj sprawę</button>}</div><div className="lx-search"><Search size={17}/><input placeholder="Szukaj po sygnaturze, kliencie lub przedmiocie" value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="lx-table"><table><thead><tr><th>Sygnatura</th><th>Przedmiot</th><th>Klient</th></tr></thead><tbody>{casesFiltered.map(c=><tr key={c.id}><td>{c.case_number||'—'}</td><td>{c.title}</td><td>{c.client_name||'—'}</td></tr>)}</tbody></table></div>{!casesFiltered.length&&<p className="lx-empty">Brak spraw pasujących do wyszukiwania.</p>}</section>}
-          {tab==='clients'&&<section className="lx-card"><div className="lx-cardhead"><h2>Klienci powiązani ze sprawami</h2></div><div className="lx-list">{clients.length?clients.map(name=><div className="lx-row" key={name}><b>{name}</b><span className="lx-badge">{data.cases.filter(c=>c.client_name===name).length} spraw</span></div>):<p className="lx-empty">Brak klientów. Oddzielna kartoteka klientów jest w planie kolejnego etapu.</p>}</div></section>}
+          {tab==='clients'&&<ClientsWorkspace
+            db={db} orgId={orgId} records={data.clients} cases={data.cases}
+            canManage={admin} crmReady={data.crmReady} onReload={refresh}
+            onError={setError} onSuccess={setNotice}/>}
+          
           {tab==='tasks'&&<section className="lx-card"><div className="lx-cardhead"><h2>Zadania</h2><button className="lx-btn primary" disabled={!data.cases.length} onClick={()=>setForm('task')}><Plus size={15}/> Dodaj zadanie</button></div>{data.tasks.map(t=><div className="lx-row" key={t.id}><div><b className={t.status==='done'?'lx-done':''}>{t.title}</b><small>{byCase(t.case_id)?.case_number||'Sprawa'} · {nice(t.due_on)}</small></div><button className="lx-btn small" disabled={busy} onClick={()=>markTask(t)}>{t.status==='done'?<><Check size={14}/> Wykonane</>:'Oznacz wykonanie'}</button></div>)}{!data.tasks.length&&<p className="lx-empty">Brak zadań w dostępnych sprawach.</p>}</section>}
           {tab==='deadlines'&&<section className="lx-card"><div className="lx-cardhead"><h2>Terminy procesowe</h2><button className="lx-btn primary" disabled={!data.cases.length} onClick={()=>setForm('deadline')}><Plus size={15}/> Dodaj termin</button></div>{data.deadlines.map(d=><div className="lx-row" key={d.id}><div><b>{d.title}</b><small>Do {nice(d.due_on)} · doręczenie: {nice(d.received_on)} · {byCase(d.case_id)?.case_number||'Sprawa'}</small></div>{d.review_status==='confirmed'?<span className="lx-badge green">Zatwierdzony</span>:<button className="lx-btn small" disabled={busy} onClick={()=>confirmDeadline(d)}>Zatwierdź</button>}</div>)}{!data.deadlines.length&&<p className="lx-empty">Brak terminów. Wprowadź termin ręcznie po sprawdzeniu dokumentów.</p>}</section>}
           {['documents','ai','billing','integrations','settings'].includes(tab)&&<Feature tab={tab} org={selectedOrg?.name} />}
