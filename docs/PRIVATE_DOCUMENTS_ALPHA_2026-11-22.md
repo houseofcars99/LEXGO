@@ -3,12 +3,13 @@
 **Status:** schema, prywatny bucket i polityki RLS zapisane w projekcie Supabase `owuniutwaqevwbzjcqls`. Testy bazy zakończone, test przeglądarkowy z rzeczywistym plikiem jeszcze wymagany.
 
 ## Funkcje i zakres
-- Osoba mająca dostęp do sprawy może zapisać dla niej PDF lub DOCX do 5 MB.
+- Osoba mająca dostęp do sprawy może zapisać dla niej PDF lub DOCX bez limitu wielkości po stronie LEXGO (obowiązuje globalny limit Supabase Storage).
 - Przeglądanie listy oraz pobieranie dokumentów wymaga sesji Supabase i aktualnych uprawnień do sprawy.
-- Bucket `lexgo-case-documents` ma `public=false`. Pliki nie dostają stałych publicznych adresów.
+- Bucket `lexgo-case-documents` ma `public=false` i nie ustala własnego limitu rozmiaru.  Pliki nie dostają stałych publicznych adresów.
 - Nazwa i dane pliku są przechowywane w tabeli `public.case_documents`. Ścieżka Storage jest generowana przez bazę jako `organization_id/case_id/document_id`.
 - Po utworzeniu wpisu `pending`, przeglądarka przesyła plik przez Storage API. Następnie status zmienia się na `ready`. Pobieranie możliwe jest tylko dla statusu `ready`.
 - Zablokowane są nadpisywanie, zmiana powiązania właścicielskiego oraz usuwanie plików przez użytkownika.
+- Pliki do 6 MiB są wysyłane standardowo; większe są przesyłane przez TUS w blokach po 6 MiB, z próbami kontynuowania po przerwaniu sieci w tej samej karcie.
 
 ## Granice bezpieczeństwa
 - **Wyłącznie fikcyjne pliki testowe.** Brak certyfikowanego skanowania antywirusowego, kontroli treści DOCX, szyfrowania kluczami zarządzanymi przez kancelarię, planu retencji i niezależnego backupu Storage.
@@ -16,6 +17,8 @@
 - Nie wdrożono wersjonowania ani historii pobrań.
 - Gdy upload lub finalizacja nie powiedzie się, w bazie może pozostać wpis `pending`. Nie usuwaj go ręcznie bez sprawdzenia rzeczywistych obiektów Storage.
 - Repozytorium GitHub `houseofcars99/LEXGO` jest publiczne; kod nie może zawierać sekretów i danych klientów.
+- Techniczny **globalny limit Supabase Storage** pozostaje aktywny. Według bieżącej dokumentacji na Free maksymalnie 50 MB, a na Pro/Team można skonfigurować limit do 500 GB; realny limit zależy również od ustawień projektu. [Ustawienia Storage](https://supabase.com/dashboard/project/owuniutwaqevwbzjcqls/storage/settings).
+- Wznawianie po awarii połączenia działa w otwartej karcie; ponowne otwarcie przeglądarki wymaga nowego przesłania. Nie przetestowano jeszcze pliku ponad globalnym limitem.
 
 ## Testy bazy wykonane
 - `storage.buckets.public=false` i `file_size_limit=5242880`.
@@ -28,11 +31,12 @@
 1. Zaloguj się do [LEXGO](https://lexgo-ecru-nu.vercel.app/).
 2. Otwórz **Dokumenty**, wybierz fikcyjną sprawę i wgraj mały **testowy** PDF, np. plik z jednym zdaniem.
 3. Sprawdź, czy pojawi się pozycja na liście, a następnie pobierz ją i porównaj zawartość.
-4. Odśwież stronę, przejdź do innej sprawy, wróć i sprawdź izolację list.
-5. Sprawdź odrzucenie pliku `.exe`, zbyt dużego PDF i pliku z nieprawidłowym nagłówkiem `%PDF-`.
-6. Z konta użytkownika bez dostępu do sprawy sprawdź, czy nie może pobrać obiektu po znanej ścieżce.
-7. Z konta zwykłego członka sprawdź dostęp tylko do przydzielonych spraw.
-8. Sprawdź reguły retencji, backup, historię audytową i zasady poufności przed przejściem do prawdziwych akt.
+4. Prześlij duży fikcyjny PDF, np. 10–20 MB (jeżeli pozwala na to globalny limit), i sprawdź wskaźnik postępu.
+5. Odśwież stronę, przejdź do innej sprawy, wróć i sprawdź izolację list.
+6. Sprawdź odrzucenie pliku `.exe`, pliku przekraczającego **limit Supabase** i pliku z nieprawidłowym nagłówkiem `%PDF-`.
+7. Z konta użytkownika bez dostępu do sprawy sprawdź, czy nie może pobrać obiektu po znanej ścieżce.
+8. Z konta zwykłego członka sprawdź dostęp tylko do przydzielonych spraw.
+9. Sprawdź reguły retencji, backup, historię audytową i zasady poufności przed przejściem do prawdziwych akt.
 
 ## Referencje
 - [Supabase Storage Access Control](https://supabase.com/docs/guides/storage/security/access-control)

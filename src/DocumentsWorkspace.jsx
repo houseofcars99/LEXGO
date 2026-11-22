@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FilePlus2, FileText, FileDown, FolderClosed, AlertTriangle, ShieldCheck, LoaderCircle, RefreshCcw } from 'lucide-react';
 import './documents.css';
+import { uploadResumableFile } from './uploadResumable.js';
 
 const BUCKET = 'lexgo-case-documents';
-const LIMIT = 5 * 1024 * 1024;
+const STANDARD_UPLOAD_THRESHOLD = 6 * 1024 * 1024;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ALLOWED = {
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -17,6 +19,7 @@ export default function DocumentsWorkspace({db,orgId,cases,userId}) {
   const [documents,setDocuments] = useState([]);
   const [loading,setLoading] = useState(false);
   const [busy,setBusy] = useState(false);
+  const [uploadProgress,setUploadProgress] = useState(null);
   const [ready,setReady] = useState(false);
   const [error,setError] = useState('');
   const [notice,setNotice] = useState('');
@@ -73,7 +76,7 @@ export default function DocumentsWorkspace({db,orgId,cases,userId}) {
     const extension=file.name.toLowerCase().split('.').pop();
     const mimeType=ALLOWED[extension];
     if(!mimeType){setError('Obsługiwane są wyłącznie pliki PDF i DOCX.');return;}
-    if(file.size<1||file.size>LIMIT){setError('Wybierz plik o rozmiarze 1 B – 5 MB.');return;}
+    if(file.size<1){setError('Nie można przesłać pustego pliku.');return;}
     if(file.name.length>180){setError('Nazwa pliku nie może przekraczać 180 znaków.');return;}
     // Minimal client-side PDF signature check, not malware scanning or content validation.
     if(extension==='pdf'){
@@ -83,6 +86,7 @@ export default function DocumentsWorkspace({db,orgId,cases,userId}) {
       }
     }
     setBusy(true);
+    setUploadProgress(0);
     try{
       const created=await db.from('case_documents')
         .insert({
@@ -95,10 +99,19 @@ export default function DocumentsWorkspace({db,orgId,cases,userId}) {
         }).select('id,storage_path').single();
       if(created.error)throw created.error;
       const item=created.data;
-      const stored=await db.storage.from(BUCKET).upload(item.storage_path,file,{
-        upsert:false,contentType:mimeType,cacheControl:'0'
-      });
-      if(stored.error)throw stored.error;
+      if (file.size > STANDARD_UPLOAD_THRESHOLD) {
+        await uploadResumableFile({
+          db, supabaseUrl:SUPABASE_URL, bucket:BUCKET,
+          objectName:item.storage_path, file, mimeType,
+          onProgress:setUploadProgress
+        });
+      } else {
+        const stored=await db.storage.from(BUCKET).upload(item.storage_path,file,{
+          upsert:false,contentType:mimeType,cacheControl:'0'
+        });
+        if(stored.error)throw stored.error;
+        setUploadProgress(100);
+      }
       const finished=await db.from('case_documents')
         .update({status:'ready'}).eq('id',item.id).eq('organization_id',orgId)
         .select('id').single();
@@ -109,7 +122,7 @@ export default function DocumentsWorkspace({db,orgId,cases,userId}) {
     }catch(e){
       setError('Przesyłanie nie zostało ukończone. '+(e.message||'Spróbuj ponownie.'));
       try{await reload();}catch(_){}
-    }finally{setBusy(false);}
+    }finally{setBusy(false);setUploadProgress(null);}
   }
 
   async function download(item){
@@ -153,9 +166,10 @@ export default function DocumentsWorkspace({db,orgId,cases,userId}) {
         <div className="doc-heading"><h2>Dodaj dokument</h2><FilePlus2 size={21}/></div>
         <form className="doc-form" onSubmit={upload}>
           <input name="file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required disabled={!ready||busy}/>
-          <button className="lx-btn primary" disabled={!ready||busy}>{busy?<LoaderCircle size={16}/>:<FilePlus2 size={16}/>} {busy?'Przesyłanie…':'Dodaj do sprawy'}</button>
+          <button className="lx-btn primary" disabled={!ready||busy}>{busy?<LoaderCircle size={16}/>:<FilePlus2 size={16}/>} {busy?'Przesyłanie '+(uploadProgress??0)+'%…':'Dodaj do sprawy'}</button>
         </form>
-        <p className="doc-note">PDF/DOCX, maksymalnie 5 MB na plik. Brak publicznych linków i nadpisywania plików.</p>
+        {busy&&uploadProgress!==null&&<progress aria-label="Postęp przesyłania" max="100" value={uploadProgress} style={{width:'100%',marginTop:10}} />}
+        <p className="doc-note">PDF/DOCX, bez limitu wielkości po stronie LEXGO. Obowiązuje globalny limit Twojego planu Supabase Storage. Duże pliki przesyłane są w częściach.</p>
       </section>
       <section className="doc-pane">
         <div className="doc-heading"><div><h2>Pliki w sprawie</h2><p>{documents.filter(x=>x.status==='ready').length} gotowych dokumentów</p></div>
